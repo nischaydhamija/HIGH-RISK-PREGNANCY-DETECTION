@@ -110,8 +110,6 @@ def _normalize_user_record(user_record: dict | str | None) -> dict:
         return {
             "password_hash": password_hash if isinstance(password_hash, str) else "",
             "history": history,
-            "verified": bool(user_record.get("verified", False)),
-            "otp": user_record.get("otp"),
         }
 
     if isinstance(user_record, str):
@@ -226,36 +224,24 @@ def signup(payload: AuthPayload):
     if not email or not password:
         return {"success": False, "message": "User ID and password are required"}
 
-    # Debug: log email received
-    print(f"Signup attempt for email: {email}", file=sys.stderr)
-
-    # Check MongoDB first using proper email query
+    # Check MongoDB first
     mongo_user = _read_user_from_mongo(email)
     if mongo_user:
-        print(f"User found in MongoDB: {email}", file=sys.stderr)
         return {"success": False, "message": "User already exists"}
 
     # Check JSON as fallback
     users = _read_users()
     if email in users:
-        print(f"User found in JSON: {email}", file=sys.stderr)
         return {"success": False, "message": "User already exists"}
 
-    print(f"User not found, creating new account: {email}", file=sys.stderr)
-
     password_hash = _hash_password(password)
-    # generate OTP and store verified=false until confirmed
-    otp = str(secrets.randbelow(1000000)).zfill(6)
-    user_record = {"password_hash": password_hash, "history": [], "verified": False, "otp": otp}
+    user_record = {"password_hash": password_hash, "history": []}
 
     users[email] = user_record
     _write_users(users)
 
     # Best-effort: write to Mongo too. Keep JSON as fallback.
-    _write_user_to_mongo(email, password_hash, [], verified=False, otp=otp)
-
-    # Try to email OTP; failure does not stop signup but is logged.
-    _send_otp_email(email, otp)
+    _write_user_to_mongo(email, password_hash, [])
 
     return {"success": True, "message": "Signup successful"}
 
@@ -273,10 +259,6 @@ def login(payload: AuthPayload):
         mongo_user_record = _normalize_user_record(mongo_user)
         stored_hash = mongo_user_record.get("password_hash")
         if isinstance(stored_hash, str) and stored_hash == _hash_password(password):
-            # require verified flag when present
-            if not mongo_user_record.get("verified"):
-                return {"success": False, "message": "Email not verified"}
-
             _sync_user_to_json(user_id, mongo_user_record)
             return {"success": True, "message": "Login successful", "user_id": user_id}
 
@@ -293,9 +275,6 @@ def login(payload: AuthPayload):
     stored_hash = user.get("password_hash")
     if not isinstance(stored_hash, str) or stored_hash != _hash_password(password):
         return {"success": False, "message": "Invalid password"}
-
-    if not user.get("verified"):
-        return {"success": False, "message": "Email not verified"}
 
     users[user_id] = user
     _write_users(users)
