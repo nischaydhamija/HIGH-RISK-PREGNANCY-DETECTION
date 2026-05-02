@@ -1,0 +1,261 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 220 25% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 10%;
+
+    --primary: 340 82% 52%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 340 55% 95%;
+    --secondary-foreground: 340 82% 42%;
+
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 10% 46%;
+
+    --accent: 155 45% 92%;
+    --accent-foreground: 155 55% 25%;
+
+    --accent-blue: 215 85% 93%;
+    --accent-blue-foreground: 215 75% 35%;
+
+    --accent-purple: 275 55% 93%;
+    --accent-purple-foreground: 275 50% 35%;
+
+    --accent-orange: 30 90% 93%;
+    --accent-orange-foreground: 30 70% 35%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 90%;
+    --input: 220 15% 90%;
+    --ring: 340 82% 52%;
+
+    --radius: 0.875rem;
+
+    --gradient-primary: linear-gradient(135deg, hsl(340, 82%, 52%), hsl(310, 70%, 50%));
+    --gradient-hero: linear-gradient(135deg, hsl(340, 85%, 50%), hsl(355, 90%, 58%), hsl(310, 70%, 52%));
+    --gradient-warm: linear-gradient(135deg, hsl(340, 82%, 52%), hsl(10, 80%, 60%));
+    --gradient-mesh: radial-gradient(at 20% 80%, hsl(340, 82%, 52%, 0.15) 0%, transparent 50%), radial-gradient(at 80% 20%, hsl(210, 80%, 60%, 0.1) 0%, transparent 50%), radial-gradient(at 50% 50%, hsl(155, 50%, 50%, 0.08) 0%, transparent 50%);
+
+    --shadow-card: 0 4px 24px -4px hsl(220 20% 20% / 0.06), 0 1px 3px hsl(220 20% 20% / 0.04);
+    --shadow-card-hover: 0 12px 40px -8px hsl(340 82% 52% / 0.15), 0 4px 12px hsl(220 20% 20% / 0.06);
+    --shadow-hero: 0 24px 80px -20px hsl(340 82% 52% / 0.25);
+    --shadow-glow: 0 0 40px -10px hsl(340 82% 52% / 0.3);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 340 82% 52%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 340 60% 96%;
+    --sidebar-accent-foreground: 340 82% 42%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 340 82% 52%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-primary);
+  }
+
+  .bg-gradient-primary {
+    background-image: var(--gradient-hero);
+  }
+
+  .bg-mesh {
+    background-image: var(--gradient-mesh);
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  .shadow-card-hover {
+    box-shadow: var(--shadow-card-hover);
+  }
+
+  .shadow-hero {
+    box-shadow: var(--shadow-hero);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .glass {
+    @apply bg-white/80 backdrop-blur-2xl border-b border-white/30;
+  }
+
+  .glass-card {
+    @apply bg-white/60 backdrop-blur-xl border border-white/40 shadow-card;
+  }
+
+  /* ECG heartbeat line animation */
+  @keyframes ecg-line {
+    0% { stroke-dashoffset: 1000; }
+    100% { stroke-dashoffset: 0; }
+  }
+
+  @keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    10% { transform: scale(1.15); }
+    20% { transform: scale(1); }
+    30% { transform: scale(1.08); }
+    40% { transform: scale(1); }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    33% { transform: translateY(-12px) rotate(2deg); }
+    66% { transform: translateY(-6px) rotate(-1deg); }
+  }
+
+  @keyframes float-slow {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  @keyframes pulse-ring {
+    0% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1.8); opacity: 0; }
+  }
+
+  @keyframes gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  @keyframes blob {
+    0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+    25% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+    50% { border-radius: 50% 60% 30% 60% / 30% 60% 70% 40%; }
+    75% { border-radius: 60% 40% 60% 30% / 60% 40% 30% 70%; }
+  }
+
+  @keyframes dash {
+    to { stroke-dashoffset: 0; }
+  }
+
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-3deg); }
+    75% { transform: rotate(3deg); }
+  }
+
+  .animate-heartbeat {
+    animation: heartbeat 1.5s ease-in-out infinite;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-float-slow {
+    animation: float-slow 8s ease-in-out infinite;
+  }
+
+  .animate-shimmer {
+    background-size: 200% 100%;
+    animation: shimmer 2.5s linear infinite;
+  }
+
+  .animate-pulse-ring {
+    animation: pulse-ring 2s ease-out infinite;
+  }
+
+  .animate-gradient-shift {
+    background-size: 200% 200%;
+    animation: gradient-shift 4s ease infinite;
+  }
+
+  .animate-blob {
+    animation: blob 8s ease-in-out infinite;
+  }
+
+  .animate-wiggle {
+    animation: wiggle 2s ease-in-out infinite;
+  }
+
+  .animate-ecg {
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 1000;
+    animation: ecg-line 3s linear infinite;
+  }
+
+  /* Button glow hover */
+  .btn-glow {
+    @apply relative overflow-hidden;
+    transition: all 0.3s ease;
+  }
+  .btn-glow::before {
+    content: '';
+    @apply absolute inset-0 opacity-0;
+    background: linear-gradient(135deg, hsl(340 82% 52% / 0.3), hsl(310 70% 50% / 0.3));
+    filter: blur(20px);
+    transition: opacity 0.3s ease;
+  }
+  .btn-glow:hover::before {
+    opacity: 1;
+  }
+  .btn-glow:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-glow);
+  }
+
+  /* Magnetic button effect via CSS */
+  .btn-magnetic {
+    transition: transform 0.2s ease, box-shadow 0.3s ease;
+  }
+  .btn-magnetic:hover {
+    transform: scale(1.05) translateY(-2px);
+    box-shadow: var(--shadow-glow);
+  }
+  .btn-magnetic:active {
+    transform: scale(0.98);
+  }
+
+  /* Stagger children animation helper */
+  .stagger-children > * {
+    opacity: 0;
+    animation: fade-up 0.5s ease forwards;
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
