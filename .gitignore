@@ -2,8 +2,6 @@ node_modules/
 env/
 __pycache__/
 *.pyc
-*.pkl
-*.joblib
 .vscode/
 dist/
 build/
