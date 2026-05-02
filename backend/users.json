@@ -135,5 +135,30 @@
   "jugraj@gmail.com": {
     "password_hash": "93269cfe2223f088462233e43ebb12294c52b7fcc9dced4607a6eb23c2110d1a",
     "history": []
+  },
+  "nischaydhamija@gmail.com": {
+    "password_hash": "6d77afe1e6183a2b18ab005e3f291167df4327089f249e5a0c5cc5789aab2738",
+    "history": [
+      {
+        "timestamp": "2026-05-02T19:40:35.559681+00:00",
+        "prediction": "High Risk",
+        "parameters": {
+          "Age": 25.0,
+          "G": 1.0,
+          "P": 3.0,
+          "L": 1.0,
+          "A": 1.0,
+          "D": 0.0,
+          "SystolicBP": 88.0,
+          "DiastolicBP": 46.0,
+          "RBS": 119.0,
+          "BodyTemp": 99.0,
+          "HeartRate": 120.0,
+          "HB": 8.0,
+          "HBA1C": 6.0,
+          "RR": 17.0
+        }
+      }
+    ]
   }
 }
