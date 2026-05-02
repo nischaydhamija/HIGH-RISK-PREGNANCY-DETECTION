@@ -37,7 +37,13 @@ export default function Login() {
       }
 
       if (data.success) {
-        localStorage.setItem("user", JSON.stringify({ user_id: data.user_id }));
+        localStorage.setItem(
+          "user",
+          JSON.stringify({
+            user_id: data.user_id,
+            history: Array.isArray(data.history) ? data.history : [],
+          }),
+        );
         navigate("/home");
       } else {
         alert(data.message || "Login failed");

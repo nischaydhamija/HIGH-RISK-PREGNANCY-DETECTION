@@ -39,7 +39,16 @@ const HealthTracking = () => {
   const [values, setValues] = useState<Record<string, string>>({});
   const [submittedValues, setSubmittedValues] = useState<Record<string, number> | null>(null);
   const [submittedTimestamp, setSubmittedTimestamp] = useState<string | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>(() => {
+    try {
+      const userRaw = localStorage.getItem("user");
+      if (!userRaw) return [];
+      const user = JSON.parse(userRaw);
+      return Array.isArray(user?.history) ? user.history : [];
+    } catch {
+      return [];
+    }
+  });
   const [historyLoading, setHistoryLoading] = useState(false);
   const [step, setStep] = useState(0);
   const [focusedField, setFocusedField] = useState<string | null>(null);

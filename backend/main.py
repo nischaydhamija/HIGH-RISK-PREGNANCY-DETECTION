@@ -118,6 +118,39 @@ def _normalize_user_record(user_record: dict | str | None) -> dict:
     return {"password_hash": "", "history": []}
 
 
+def _sorted_history(history: list | None) -> list:
+    if not isinstance(history, list):
+        return []
+
+    return sorted(
+        history,
+        key=lambda item: item.get("timestamp", "") if isinstance(item, dict) else "",
+        reverse=True,
+    )
+
+
+def _merge_history_entries(*histories: list | None) -> list:
+    merged: list = []
+    seen: set[str] = set()
+
+    for history in histories:
+        if not isinstance(history, list):
+            continue
+
+        for entry in history:
+            if not isinstance(entry, dict):
+                continue
+
+            fingerprint = json.dumps(entry, sort_keys=True, default=str)
+            if fingerprint in seen:
+                continue
+
+            seen.add(fingerprint)
+            merged.append(entry)
+
+    return _sorted_history(merged)
+
+
 def _mongo_collection():
     try:
         return get_users_collection()
@@ -176,6 +209,55 @@ def _sync_user_to_json(user_id: str, user_record: dict | str | None) -> None:
     users = _read_users()
     users[user_id] = _normalize_user_record(user_record)
     _write_users(users)
+
+
+def _append_prediction_to_user_history(user_id: str, prediction_data: dict) -> None:
+    collection = _mongo_collection()
+    mongo_user = None
+
+    if collection is not None:
+        try:
+            collection.update_one(
+                {"email": user_id},
+                {"$push": {"history": prediction_data}},
+            )
+            mongo_user = collection.find_one({"email": user_id})
+        except Exception as exc:
+            print(f"Warning: Failed to append prediction to MongoDB: {exc}", file=sys.stderr)
+
+    users = _read_users()
+    raw_user = users.get(user_id)
+    if raw_user:
+        user = _normalize_user_record(raw_user)
+        user["history"].append(prediction_data)
+        users[user_id] = user
+        _write_users(users)
+    elif mongo_user:
+        _sync_user_to_json(user_id, mongo_user)
+
+
+def _get_user_profile(user_id: str) -> dict | None:
+    mongo_user = _read_user_from_mongo(user_id)
+    users = _read_users()
+    raw_user = users.get(user_id)
+
+    if mongo_user:
+        normalized_user = _normalize_user_record(mongo_user)
+        json_user = _normalize_user_record(raw_user) if raw_user else {"password_hash": "", "history": []}
+        merged_user = {
+            "password_hash": normalized_user.get("password_hash") or json_user.get("password_hash", ""),
+            "history": _merge_history_entries(normalized_user.get("history", []), json_user.get("history", [])),
+        }
+        _sync_user_to_json(user_id, merged_user)
+        return merged_user
+
+    if raw_user:
+        normalized_user = _normalize_user_record(raw_user)
+        users[user_id] = normalized_user
+        _write_users(users)
+        return normalized_user
+
+    return None
 
 
 def _send_otp_email(to_email: str, otp: str) -> bool:
@@ -259,8 +341,18 @@ def login(payload: AuthPayload):
         mongo_user_record = _normalize_user_record(mongo_user)
         stored_hash = mongo_user_record.get("password_hash")
         if isinstance(stored_hash, str) and stored_hash == _hash_password(password):
-            _sync_user_to_json(user_id, mongo_user_record)
-            return {"success": True, "message": "Login successful", "user_id": user_id}
+            json_user = _normalize_user_record(_read_users().get(user_id))
+            merged_user = {
+                "password_hash": mongo_user_record.get("password_hash") or json_user.get("password_hash", ""),
+                "history": _merge_history_entries(mongo_user_record.get("history", []), json_user.get("history", [])),
+            }
+            _sync_user_to_json(user_id, merged_user)
+            return {
+                "success": True,
+                "message": "Login successful",
+                "user_id": user_id,
+                "history": merged_user["history"],
+            }
 
         return {"success": False, "message": "Invalid password"}
 
@@ -282,7 +374,12 @@ def login(payload: AuthPayload):
     # Best-effort backfill keeps MongoDB in sync during the staged migration.
     _write_user_to_mongo(user_id, stored_hash, user.get("history", []))
 
-    return {"success": True, "message": "Login successful", "user_id": user_id}
+    return {
+        "success": True,
+        "message": "Login successful",
+        "user_id": user_id,
+        "history": _sorted_history(user.get("history", [])),
+    }
 
 
 @app.post("/verify-email")
@@ -329,22 +426,11 @@ def verify_email(payload: VerifyPayload):
 @app.get("/history/{user_id}")
 def user_history(user_id: str):
     normalized_user_id = user_id.strip().lower()
-    users = _read_users()
-    raw_user = users.get(normalized_user_id)
-    if not raw_user:
+    user = _get_user_profile(normalized_user_id)
+    if not user:
         return {"success": False, "message": "User not found", "history": []}
 
-    user = _normalize_user_record(raw_user)
-    users[normalized_user_id] = user
-    _write_users(users)
-
-    history = user.get("history", [])
-    history_sorted = sorted(
-        history,
-        key=lambda item: item.get("timestamp", ""),
-        reverse=True,
-    )
-    return {"success": True, "history": history_sorted}
+    return {"success": True, "history": _sorted_history(user.get("history", []))}
 
 @app.post("/predict")
 def predict(data: dict):
@@ -371,18 +457,12 @@ def predict(data: dict):
         user_id = str(user_id_raw).strip().lower() if user_id_raw is not None else ""
 
         if user_id:
-            users = _read_users()
-            raw_user = users.get(user_id)
-            if raw_user:
-                user = _normalize_user_record(raw_user)
-                history_entry = {
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "prediction": result,
-                    "parameters": {name: float(data[name]) for name in required_features},
-                }
-                user["history"].append(history_entry)
-                users[user_id] = user
-                _write_users(users)
+            prediction_data = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "prediction": result,
+                "parameters": {name: float(data[name]) for name in required_features},
+            }
+            _append_prediction_to_user_history(user_id, prediction_data)
 
         return {"prediction": result}
 
