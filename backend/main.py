@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 # Construct absolute paths for model and users file
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_FILE = os.path.join(BACKEND_DIR, "random_forest_model.pkl")
+MODEL_FILE = os.path.join(BACKEND_DIR, "model.pkl")
 USERS_FILE = os.path.join(BACKEND_DIR, "users.json")
 
 # Global model variable
