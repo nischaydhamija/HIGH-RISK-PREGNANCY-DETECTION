@@ -5,12 +5,37 @@ import joblib
 import hashlib
 import json
 import os
+import sys
 from pathlib import Path
 from datetime import datetime, timezone
 
-app = FastAPI()
+# Construct absolute paths for model and users file
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_FILE = os.path.join(BACKEND_DIR, "random_forest_model.pkl")
+USERS_FILE = os.path.join(BACKEND_DIR, "users.json")
 
-MODEL_FILE = Path(__file__).with_name("random_forest_model.pkl")
+# Global model variable
+model = None
+
+def load_model():
+    """Load the ML model with error handling."""
+    global model
+    try:
+        if not os.path.exists(MODEL_FILE):
+            print(f"ERROR: Model file not found at {MODEL_FILE}", file=sys.stderr)
+            print(f"Current backend directory: {BACKEND_DIR}", file=sys.stderr)
+            print(f"Files in backend directory: {os.listdir(BACKEND_DIR)}", file=sys.stderr)
+            return False
+        
+        model = joblib.load(MODEL_FILE)
+        print(f"✓ Model loaded successfully from {MODEL_FILE}")
+        return True
+    except Exception as e:
+        print(f"ERROR: Failed to load model from {MODEL_FILE}: {str(e)}", file=sys.stderr)
+        return False
+
+app = FastAPI(title="MatriCare Backend")
+
 ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv("CORS_ORIGINS", "*").split(",")
@@ -25,8 +50,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-model = joblib.load(MODEL_FILE)
-USERS_FILE = Path(__file__).with_name("users.json")
+@app.on_event("startup")
+async def startup_event():
+    """Load model on app startup."""
+    success = load_model()
+    if not success:
+        print("WARNING: App started but model failed to load. Predictions will fail.", file=sys.stderr)
 
 
 class AuthPayload(BaseModel):
@@ -35,19 +64,23 @@ class AuthPayload(BaseModel):
 
 
 def _read_users() -> dict:
-    if not USERS_FILE.exists():
+    if not os.path.exists(USERS_FILE):
         return {}
     try:
-        with USERS_FILE.open("r", encoding="utf-8") as f:
+        with open(USERS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
         return data if isinstance(data, dict) else {}
-    except Exception:
+    except Exception as e:
+        print(f"Warning: Failed to read users file: {str(e)}", file=sys.stderr)
         return {}
 
 
 def _write_users(users: dict) -> None:
-    with USERS_FILE.open("w", encoding="utf-8") as f:
-        json.dump(users, f, indent=2)
+    try:
+        with open(USERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(users, f, indent=2)
+    except Exception as e:
+        print(f"Error: Failed to write users file: {str(e)}", file=sys.stderr)
 
 
 def _hash_password(password: str) -> str:
@@ -137,6 +170,9 @@ def user_history(user_id: str):
 @app.post("/predict")
 def predict(data: dict):
     try:
+        if model is None:
+            return {"error": "Model is not loaded. Please check server logs."}
+        
         required_features = list(getattr(model, "feature_names_in_", [
             "Age", "G", "P", "L", "A", "D", "SystolicBP", "DiastolicBP",
             "RBS", "BodyTemp", "HeartRate", "HB", "HBA1C", "RR"
@@ -172,4 +208,5 @@ def predict(data: dict):
         return {"prediction": result}
 
     except Exception as e:
+        print(f"Prediction error: {str(e)}", file=sys.stderr)
         return {"error": str(e)}
