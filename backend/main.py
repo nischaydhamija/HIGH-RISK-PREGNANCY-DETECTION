@@ -155,7 +155,7 @@ def _write_user_to_mongo(
         return False
 
     try:
-        set_fields = {"email": user_id}
+        set_fields: dict = {"email": user_id}
         if password_hash is not None:
             set_fields["password"] = password_hash
         if history is not None:
@@ -187,9 +187,9 @@ def _send_otp_email(to_email: str, otp: str) -> bool:
     """
     smtp_server = os.getenv("EMAIL_SMTP_SERVER", "smtp.gmail.com")
     smtp_port = int(os.getenv("EMAIL_SMTP_PORT", "465"))
-    email_user = os.getenv("EMAIL_USER")
-    email_pass = os.getenv("EMAIL_PASS")
-    email_from = os.getenv("EMAIL_FROM", email_user)
+    email_user = os.getenv("EMAIL_USER", "").strip()
+    email_pass = os.getenv("EMAIL_PASS", "").strip()
+    email_from = os.getenv("EMAIL_FROM", "").strip() or email_user
 
     if not email_user or not email_pass:
         print("Warning: EMAIL_USER or EMAIL_PASS not configured; skipping OTP send", file=sys.stderr)
@@ -220,29 +220,42 @@ def home():
 
 @app.post("/signup")
 def signup(payload: AuthPayload):
-    user_id = payload.user_id.strip().lower()
+    email = payload.user_id.strip().lower()
     password = payload.password.strip()
 
-    if not user_id or not password:
+    if not email or not password:
         return {"success": False, "message": "User ID and password are required"}
 
-    users = _read_users()
-    if user_id in users:
+    # Debug: log email received
+    print(f"Signup attempt for email: {email}", file=sys.stderr)
+
+    # Check MongoDB first using proper email query
+    mongo_user = _read_user_from_mongo(email)
+    if mongo_user:
+        print(f"User found in MongoDB: {email}", file=sys.stderr)
         return {"success": False, "message": "User already exists"}
+
+    # Check JSON as fallback
+    users = _read_users()
+    if email in users:
+        print(f"User found in JSON: {email}", file=sys.stderr)
+        return {"success": False, "message": "User already exists"}
+
+    print(f"User not found, creating new account: {email}", file=sys.stderr)
 
     password_hash = _hash_password(password)
     # generate OTP and store verified=false until confirmed
     otp = str(secrets.randbelow(1000000)).zfill(6)
     user_record = {"password_hash": password_hash, "history": [], "verified": False, "otp": otp}
 
-    users[user_id] = user_record
+    users[email] = user_record
     _write_users(users)
 
     # Best-effort: write to Mongo too. Keep JSON as fallback.
-    _write_user_to_mongo(user_id, password_hash, [], verified=False, otp=otp)
+    _write_user_to_mongo(email, password_hash, [], verified=False, otp=otp)
 
     # Try to email OTP; failure does not stop signup but is logged.
-    _send_otp_email(user_id, otp)
+    _send_otp_email(email, otp)
 
     return {"success": True, "message": "Signup successful"}
 
