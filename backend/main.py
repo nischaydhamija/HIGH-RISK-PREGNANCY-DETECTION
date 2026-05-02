@@ -8,6 +8,11 @@ import os
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
+import secrets
+import smtplib
+import ssl
+
+from db import MongoUnavailableError, get_users_collection
 
 # Construct absolute paths for model and users file
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -63,6 +68,11 @@ class AuthPayload(BaseModel):
     password: str
 
 
+class VerifyPayload(BaseModel):
+    email: str
+    otp: str
+
+
 def _read_users() -> dict:
     if not os.path.exists(USERS_FILE):
         return {}
@@ -89,15 +99,119 @@ def _hash_password(password: str) -> str:
 
 def _normalize_user_record(user_record: dict | str | None) -> dict:
     if isinstance(user_record, dict):
+        password_hash = user_record.get("password_hash")
+        if not isinstance(password_hash, str) or not password_hash:
+            password_hash = user_record.get("password")
+
         history = user_record.get("history")
         if not isinstance(history, list):
-            user_record["history"] = []
-        return user_record
+            history = []
+
+        return {
+            "password_hash": password_hash if isinstance(password_hash, str) else "",
+            "history": history,
+            "verified": bool(user_record.get("verified", False)),
+            "otp": user_record.get("otp"),
+        }
 
     if isinstance(user_record, str):
         return {"password_hash": user_record, "history": []}
 
     return {"password_hash": "", "history": []}
+
+
+def _mongo_collection():
+    try:
+        return get_users_collection()
+    except MongoUnavailableError as exc:
+        print(f"Warning: MongoDB unavailable: {exc}", file=sys.stderr)
+    except Exception as exc:
+        print(f"Warning: Failed to access MongoDB: {exc}", file=sys.stderr)
+
+    return None
+
+
+def _read_user_from_mongo(user_id: str):
+    collection = _mongo_collection()
+    if collection is None:
+        return None
+
+    try:
+        return collection.find_one({"email": user_id})
+    except Exception as exc:
+        print(f"Warning: Failed to read user from MongoDB: {exc}", file=sys.stderr)
+        return None
+
+
+def _write_user_to_mongo(
+    user_id: str,
+    password_hash: str | None = None,
+    history: list | None = None,
+    verified: bool | None = None,
+    otp: str | None = None,
+) -> bool:
+    collection = _mongo_collection()
+    if collection is None:
+        return False
+
+    try:
+        set_fields = {"email": user_id}
+        if password_hash is not None:
+            set_fields["password"] = password_hash
+        if history is not None:
+            set_fields["history"] = history
+        if verified is not None:
+            set_fields["verified"] = bool(verified)
+        if otp is not None:
+            set_fields["otp"] = otp
+
+        update_doc = {"$set": set_fields, "$setOnInsert": {"created_at": datetime.now(timezone.utc)}}
+
+        collection.update_one({"email": user_id}, update_doc, upsert=True)
+        return True
+    except Exception as exc:
+        print(f"Warning: Failed to write user to MongoDB: {exc}", file=sys.stderr)
+        return False
+
+
+def _sync_user_to_json(user_id: str, user_record: dict | str | None) -> None:
+    users = _read_users()
+    users[user_id] = _normalize_user_record(user_record)
+    _write_users(users)
+
+
+def _send_otp_email(to_email: str, otp: str) -> bool:
+    """Send a short OTP email using SMTP. Uses env vars and fails gracefully.
+
+    Required env vars: EMAIL_USER, EMAIL_PASS. Optional: EMAIL_SMTP_SERVER, EMAIL_SMTP_PORT, EMAIL_FROM
+    """
+    smtp_server = os.getenv("EMAIL_SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(os.getenv("EMAIL_SMTP_PORT", "465"))
+    email_user = os.getenv("EMAIL_USER")
+    email_pass = os.getenv("EMAIL_PASS")
+    email_from = os.getenv("EMAIL_FROM", email_user)
+
+    if not email_user or not email_pass:
+        print("Warning: EMAIL_USER or EMAIL_PASS not configured; skipping OTP send", file=sys.stderr)
+        return False
+
+    message = f"Subject: Your MatriCare OTP\n\nYour verification code is: {otp}\nIt expires in a few minutes."  # minimal body
+
+    try:
+        context = ssl.create_default_context()
+        if smtp_port == 465:
+            with smtplib.SMTP_SSL(smtp_server, smtp_port, context=context) as server:
+                server.login(email_user, email_pass)
+                server.sendmail(email_from, to_email, message)
+        else:
+            with smtplib.SMTP(smtp_server, smtp_port) as server:
+                server.starttls(context=context)
+                server.login(email_user, email_pass)
+                server.sendmail(email_from, to_email, message)
+        return True
+    except Exception as exc:
+        print(f"Warning: Failed to send OTP email: {exc}", file=sys.stderr)
+        return False
 
 @app.get ('/')
 def home():
@@ -116,8 +230,20 @@ def signup(payload: AuthPayload):
     if user_id in users:
         return {"success": False, "message": "User already exists"}
 
-    users[user_id] = {"password_hash": _hash_password(password), "history": []}
+    password_hash = _hash_password(password)
+    # generate OTP and store verified=false until confirmed
+    otp = str(secrets.randbelow(1000000)).zfill(6)
+    user_record = {"password_hash": password_hash, "history": [], "verified": False, "otp": otp}
+
+    users[user_id] = user_record
     _write_users(users)
+
+    # Best-effort: write to Mongo too. Keep JSON as fallback.
+    _write_user_to_mongo(user_id, password_hash, [], verified=False, otp=otp)
+
+    # Try to email OTP; failure does not stop signup but is logged.
+    _send_otp_email(user_id, otp)
+
     return {"success": True, "message": "Signup successful"}
 
 
@@ -128,6 +254,20 @@ def login(payload: AuthPayload):
 
     if not user_id or not password:
         return {"success": False, "message": "User ID and password are required"}
+
+    mongo_user = _read_user_from_mongo(user_id)
+    if mongo_user:
+        mongo_user_record = _normalize_user_record(mongo_user)
+        stored_hash = mongo_user_record.get("password_hash")
+        if isinstance(stored_hash, str) and stored_hash == _hash_password(password):
+            # require verified flag when present
+            if not mongo_user_record.get("verified"):
+                return {"success": False, "message": "Email not verified"}
+
+            _sync_user_to_json(user_id, mongo_user_record)
+            return {"success": True, "message": "Login successful", "user_id": user_id}
+
+        return {"success": False, "message": "Invalid password"}
 
     users = _read_users()
     raw_user = users.get(user_id)
@@ -141,10 +281,57 @@ def login(payload: AuthPayload):
     if not isinstance(stored_hash, str) or stored_hash != _hash_password(password):
         return {"success": False, "message": "Invalid password"}
 
+    if not user.get("verified"):
+        return {"success": False, "message": "Email not verified"}
+
     users[user_id] = user
     _write_users(users)
 
+    # Best-effort backfill keeps MongoDB in sync during the staged migration.
+    _write_user_to_mongo(user_id, stored_hash, user.get("history", []))
+
     return {"success": True, "message": "Login successful", "user_id": user_id}
+
+
+@app.post("/verify-email")
+def verify_email(payload: VerifyPayload):
+    email = payload.email.strip().lower()
+    otp = payload.otp.strip()
+
+    if not email or not otp:
+        return {"success": False, "message": "Email and OTP are required"}
+
+    users = _read_users()
+    raw_user = users.get(email)
+
+    # First check JSON store
+    if raw_user:
+        user = _normalize_user_record(raw_user)
+        stored_otp = user.get("otp")
+        if stored_otp and stored_otp == otp:
+            user["verified"] = True
+            user.pop("otp", None)
+            users[email] = user
+            _write_users(users)
+            # mirror to Mongo
+            _write_user_to_mongo(email, user.get("password_hash"), user.get("history", []), verified=True, otp=None)
+            return {"success": True, "message": "Email verified"}
+        return {"success": False, "message": "Invalid OTP"}
+
+    # Fall back to Mongo
+    mongo_user = _read_user_from_mongo(email)
+    if mongo_user:
+        muser = _normalize_user_record(mongo_user)
+        stored_otp = muser.get("otp")
+        if stored_otp and stored_otp == otp:
+            # update Mongo
+            _write_user_to_mongo(email, muser.get("password_hash"), muser.get("history", []), verified=True, otp=None)
+            # sync back to JSON
+            _sync_user_to_json(email, {**muser, "verified": True, "otp": None})
+            return {"success": True, "message": "Email verified"}
+        return {"success": False, "message": "Invalid OTP"}
+
+    return {"success": False, "message": "User not found"}
 
 
 @app.get("/history/{user_id}")

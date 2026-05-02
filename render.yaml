@@ -8,6 +8,10 @@ services:
     envVars:
       - key: CORS_ORIGINS
         sync: false
+      - key: MONGO_URI
+        sync: false
+      - key: MONGO_DB_NAME
+        sync: false
   - type: static
     name: matri-care-frontend
     rootDir: frontend
