@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import BackgroundTasks, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import bcrypt
@@ -383,19 +383,18 @@ def _send_otp_email(to_email: str, otp: str) -> bool:
     message = f"Subject: Your MatriCare verification code\n\nYour verification code is: {otp}"
 
     try:
+        print("Sending OTP...")
         context = ssl.create_default_context()
-        if smtp_port == 465:
-            with smtplib.SMTP_SSL(smtp_server, smtp_port, context=context) as server:
-                server.login(email_user, email_pass)
-                server.sendmail(email_from, to_email, message)
-        else:
-            with smtplib.SMTP(smtp_server, smtp_port) as server:
-                server.starttls(context=context)
-                server.login(email_user, email_pass)
-                server.sendmail(email_from, to_email, message)
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+            server.starttls(context=context)
+            server.login(email_user, email_pass)
+            server.sendmail(email_from, to_email, message)
+            server.quit()
+        print("Email sent successfully")
         logger.info("OTP email sent to %s", to_email)
         return True
     except Exception as exc:
+        print("Email error:", exc)
         logger.warning("Failed to send OTP email to %s: %s", to_email, exc)
         return False
 
@@ -421,8 +420,15 @@ def home():
     return {'massage': 'backend running'}
 
 
+def _send_otp_email_safely(to_email: str, otp: str) -> None:
+    try:
+        _send_otp_email(to_email, otp)
+    except Exception as exc:
+        logger.warning("Background OTP send failed for %s: %s", to_email, exc)
+
+
 @app.post("/signup")
-def signup(payload: AuthPayload):
+def signup(payload: AuthPayload, background_tasks: BackgroundTasks):
     email = _normalize_auth_email(payload)
     password = payload.password.strip()
 
@@ -447,7 +453,7 @@ def signup(payload: AuthPayload):
                 "otp_expiry": otp_expiry,
             },
         )
-        _send_otp_email(email, otp_code)
+        background_tasks.add_task(_send_otp_email_safely, email, otp_code)
         logger.info("OTP resent during signup for unverified user: %s", email)
         return {"success": True, "message": "OTP resent", "email": email}
 
@@ -469,7 +475,7 @@ def signup(payload: AuthPayload):
         }
         users[email] = _json_safe_value(updated_user)
         _write_users(users)
-        _send_otp_email(email, otp_code)
+        background_tasks.add_task(_send_otp_email_safely, email, otp_code)
         logger.info("OTP resent during signup for unverified JSON user: %s", email)
         return {"success": True, "message": "OTP resent", "email": email}
 
@@ -493,7 +499,7 @@ def signup(payload: AuthPayload):
         users[email] = _json_safe_value(user_record)
         _write_users(users)
 
-    _send_otp_email(email, otp_code)
+    background_tasks.add_task(_send_otp_email_safely, email, otp_code)
     logger.info("New user created and OTP sent: %s", email)
     return {"success": True, "message": "OTP sent", "email": email}
 
