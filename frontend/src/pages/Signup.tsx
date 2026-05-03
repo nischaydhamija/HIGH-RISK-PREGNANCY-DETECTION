@@ -6,15 +6,15 @@ import { API_BASE_URL } from "../lib/api";
 
 export default function Signup() {
   const navigate = useNavigate();
-  const [userId, setUserId] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const handleSignup = async () => {
-    const normalizedUserId = userId.trim().toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
     const normalizedPassword = password.trim();
 
-    if (!normalizedUserId || !normalizedPassword) {
-      alert("Enter user ID and password");
+    if (!normalizedEmail || !normalizedPassword) {
+      alert("Enter email and password");
       return;
     }
 
@@ -24,7 +24,7 @@ export default function Signup() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ user_id: normalizedUserId, password: normalizedPassword }),
+        body: JSON.stringify({ email: normalizedEmail, password: normalizedPassword }),
       });
 
       const responseText = await response.text();
@@ -36,8 +36,8 @@ export default function Signup() {
       }
 
       if (data.success) {
-        alert("Signup successful. Please login.");
-        navigate("/");
+        localStorage.setItem("pendingVerificationEmail", data.email || normalizedEmail);
+        navigate("/verify");
       } else {
         alert(data.message || "Signup failed");
       }
@@ -82,9 +82,9 @@ export default function Signup() {
           <div className="space-y-4">
             <input
               type="text"
-              placeholder="User ID"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               onKeyDown={handleKeyDown}
               className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-rose-300"
             />

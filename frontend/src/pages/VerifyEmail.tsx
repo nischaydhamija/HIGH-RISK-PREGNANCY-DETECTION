@@ -1,67 +1,62 @@
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Heart } from "lucide-react";
 import heroImage from "@/assets/hero-mother.jpg";
 import { API_BASE_URL } from "../lib/api";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
-export default function Login() {
+export default function VerifyEmail() {
   const navigate = useNavigate();
-
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
 
-  const handleLogin = async () => {
+  useEffect(() => {
+    const storedEmail = localStorage.getItem("pendingVerificationEmail") || "";
+    setEmail(storedEmail);
+  }, []);
+
+  const handleVerify = async () => {
     const normalizedEmail = email.trim().toLowerCase();
-    const normalizedPassword = password.trim();
+    const normalizedOtp = otp.trim();
 
-    if (!normalizedEmail || !normalizedPassword) {
-      alert("Enter email and password");
+    if (!normalizedEmail || normalizedOtp.length !== 6) {
+      alert("Enter email and the 6-digit OTP");
       return;
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/login`, {
+      const response = await fetch(`${API_BASE_URL}/verify-email`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email: normalizedEmail, password: normalizedPassword }),
+        body: JSON.stringify({ email: normalizedEmail, otp: normalizedOtp }),
       });
 
       const responseText = await response.text();
       const data = responseText ? JSON.parse(responseText) : null;
 
       if (!response.ok) {
-        alert(data?.message || data?.error || "Login failed");
+        alert(data?.message || data?.error || "Verification failed");
         return;
       }
 
       if (data.success) {
         localStorage.removeItem("pendingVerificationEmail");
-        localStorage.setItem(
-          "user",
-          JSON.stringify({
-            user_id: data.user_id,
-            history: Array.isArray(data.history) ? data.history : [],
-          }),
-        );
-        navigate("/home");
+        alert("Email verified successfully. Please login.");
+        navigate("/");
       } else {
-        if ((data?.message || "").toLowerCase().includes("verify your email")) {
-          localStorage.setItem("pendingVerificationEmail", normalizedEmail);
-          navigate("/verify");
-        }
-        alert(data.message || "Login failed");
+        alert(data.message || "Verification failed");
       }
     } catch (error) {
       console.error(error);
-      alert(`Login failed. Make sure the backend is reachable at ${API_BASE_URL}`);
+      alert(`Verification failed. Make sure the backend is reachable at ${API_BASE_URL}`);
     }
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
-      handleLogin();
+      handleVerify();
     }
   };
 
@@ -76,8 +71,8 @@ export default function Login() {
           />
           <div className="absolute inset-0 bg-gradient-to-t from-rose-900/60 via-rose-800/20 to-transparent" />
           <div className="absolute bottom-6 left-6 right-6 text-white">
-            <p className="text-sm uppercase tracking-[0.2em] opacity-80">Official Portal</p>
-            <p className="text-2xl font-bold leading-tight mt-2">MatriCare Maternal Health Platform</p>
+            <p className="text-sm uppercase tracking-[0.2em] opacity-80">Verification</p>
+            <p className="text-2xl font-bold leading-tight mt-2">Confirm your email to unlock access</p>
           </div>
         </div>
 
@@ -89,11 +84,11 @@ export default function Login() {
             <h1 className="text-3xl font-bold text-slate-900">MatriCare</h1>
           </div>
 
-          <p className="text-center text-slate-600 mb-8">Sign in to continue to your health dashboard</p>
+          <p className="text-center text-slate-600 mb-8">Enter the OTP sent to your email</p>
 
           <div className="space-y-4">
             <input
-              type="text"
+              type="email"
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -101,27 +96,31 @@ export default function Login() {
               className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-rose-300"
             />
 
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-rose-300"
-            />
+            <div className="flex justify-center py-2">
+              <InputOTP maxLength={6} value={otp} onChange={setOtp}>
+                <InputOTPGroup className="gap-2">
+                  <InputOTPSlot index={0} className="rounded-xl border border-slate-300" />
+                  <InputOTPSlot index={1} className="rounded-xl border border-slate-300" />
+                  <InputOTPSlot index={2} className="rounded-xl border border-slate-300" />
+                  <InputOTPSlot index={3} className="rounded-xl border border-slate-300" />
+                  <InputOTPSlot index={4} className="rounded-xl border border-slate-300" />
+                  <InputOTPSlot index={5} className="rounded-xl border border-slate-300" />
+                </InputOTPGroup>
+              </InputOTP>
+            </div>
 
             <button
-              onClick={handleLogin}
+              onClick={handleVerify}
               className="w-full rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-semibold py-3 transition-colors"
             >
-              Login
+              Verify Email
             </button>
 
             <button
               onClick={() => navigate("/signup")}
               className="w-full rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium py-3 transition-colors"
             >
-              New user? Register
+              Back to Signup
             </button>
           </div>
         </div>
