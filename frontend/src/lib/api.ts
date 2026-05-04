@@ -1,7 +1,9 @@
 const normalizeBaseUrl = (value: string | undefined) => {
   const baseUrl = value?.trim();
   if (!baseUrl) {
-    return "https://high-risk-pregnancy-detection.onrender.com";
+    return import.meta.env.DEV
+      ? "http://127.0.0.1:8000"
+      : "https://high-risk-pregnancy-detection.onrender.com";
   }
 
   return baseUrl.replace(/\/$/, "");

@@ -111,7 +111,12 @@ def _hash_password(password: str) -> str:
 
 def _verify_password(password: str, password_hash: str) -> bool:
     try:
-        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+        # Support both bcrypt hashes and legacy sha256 hex digests.
+        if password_hash.startswith(("$2a$", "$2b$", "$2y$")):
+            return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+
+        legacy_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
+        return password_hash == legacy_hash
     except Exception:
         return False
 
