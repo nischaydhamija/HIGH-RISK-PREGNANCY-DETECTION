@@ -47,10 +47,6 @@ export default function Login() {
         );
         navigate("/home");
       } else {
-        if ((data?.message || "").toLowerCase().includes("verify your email")) {
-          localStorage.setItem("pendingVerificationEmail", normalizedEmail);
-          navigate("/verify");
-        }
         alert(data.message || "Login failed");
       }
     } catch (error) {

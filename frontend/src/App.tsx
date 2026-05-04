@@ -1,6 +1,5 @@
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
-import VerifyEmail from "./pages/VerifyEmail";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -40,7 +39,7 @@ const PublicRoute = ({ children }: { children: JSX.Element }) => {
 
 const AppRoutes = () => {
   const location = useLocation();
-  const isAuthPage = location.pathname === "/" || location.pathname === "/signup" || location.pathname === "/verify";
+  const isAuthPage = location.pathname === "/" || location.pathname === "/signup";
 
   return (
     <>
@@ -59,14 +58,6 @@ const AppRoutes = () => {
           element={
             <PublicRoute>
               <Signup />
-            </PublicRoute>
-          }
-        />
-        <Route
-          path="/verify"
-          element={
-            <PublicRoute>
-              <VerifyEmail />
             </PublicRoute>
           }
         />

@@ -36,8 +36,8 @@ export default function Signup() {
       }
 
       if (data.success) {
-        localStorage.setItem("pendingVerificationEmail", data.email || normalizedEmail);
-        navigate("/verify");
+        localStorage.removeItem("pendingVerificationEmail");
+        navigate("/");
       } else {
         alert(data.message || "Signup failed");
       }
