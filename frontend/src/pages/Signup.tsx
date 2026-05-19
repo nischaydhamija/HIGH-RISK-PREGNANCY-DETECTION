@@ -2,7 +2,7 @@ import { useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Heart } from "lucide-react";
 import heroImage from "@/assets/hero-mother.jpg";
-import { API_BASE_URL } from "../lib/api";
+import { API_BASE_URL, getApiUrl, parseApiJson, readApiResponseMessage } from "../lib/api";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -19,7 +19,7 @@ export default function Signup() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/signup`, {
+      const response = await fetch(getApiUrl("/signup"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -28,10 +28,10 @@ export default function Signup() {
       });
 
       const responseText = await response.text();
-      const data = responseText ? JSON.parse(responseText) : null;
+      const data = parseApiJson<{ success?: boolean; message?: string; error?: string }>(responseText);
 
       if (!response.ok) {
-        alert(data?.message || data?.error || "Signup failed");
+        alert(readApiResponseMessage(responseText, "Signup failed"));
         return;
       }
 
@@ -43,7 +43,7 @@ export default function Signup() {
       }
     } catch (error) {
       console.error(error);
-      alert(`Signup failed. Make sure the backend is reachable at ${API_BASE_URL}`);
+      alert(API_BASE_URL ? `Signup failed. Make sure the backend is reachable at ${API_BASE_URL}` : "Signup failed. Set VITE_API_URL first.");
     }
   };
 

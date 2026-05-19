@@ -5,7 +5,7 @@ import PageHeader from "@/components/PageHeader";
 import ECGHeartbeat from "@/components/ECGHeartbeat";
 import FloatingParticles from "@/components/FloatingParticles";
 import { Info, CheckCircle, ArrowRight, ArrowLeft } from "lucide-react";
-import { API_BASE_URL } from "../lib/api";
+import { API_BASE_URL, getApiUrl, parseApiJson, readApiResponseMessage } from "../lib/api";
 
 type HistoryEntry = {
   timestamp: string;
@@ -75,12 +75,14 @@ const HealthTracking = () => {
 
     try {
       setHistoryLoading(true);
-      const response = await fetch(`${API_BASE_URL}/history/${encodeURIComponent(userId)}`);
+      const response = await fetch(getApiUrl(`/history/${encodeURIComponent(userId)}`));
+      const responseText = await response.text();
       if (!response.ok) {
+        console.warn(readApiResponseMessage(responseText, "Failed to load history"));
         return;
       }
 
-      const data = await response.json();
+      const data = parseApiJson<{ success?: boolean; history?: HistoryEntry[] }>(responseText);
       if (data.success && Array.isArray(data.history)) {
         setHistory(data.history);
       }
@@ -128,7 +130,7 @@ const HealthTracking = () => {
       );
       const userId = getCurrentUserId();
 
-      const response = await fetch(`${API_BASE_URL}/predict`, {
+      const response = await fetch(getApiUrl("/predict"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -138,13 +140,13 @@ const HealthTracking = () => {
           ...(userId ? { user_id: userId } : {}),
         }),
       });
+      const responseText = await response.text();
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(errorText || `HTTP ${response.status}`);
-        }
+      if (!response.ok) {
+        throw new Error(readApiResponseMessage(responseText, `HTTP ${response.status}`));
+      }
 
-      const data = await response.json();
+      const data = parseApiJson<{ prediction?: string; result?: string; error?: string }>(responseText);
 
       console.log("API RESPONSE:", data);
 
@@ -185,7 +187,7 @@ const HealthTracking = () => {
       }
     } catch (error) {
       console.error(error);
-        alert("API failed");
+        alert(error instanceof Error ? error.message : "API failed");
     }
   };
 

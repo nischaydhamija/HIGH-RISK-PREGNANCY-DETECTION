@@ -2,7 +2,7 @@ import { useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Heart } from "lucide-react";
 import heroImage from "@/assets/hero-mother.jpg";
-import { API_BASE_URL } from "../lib/api";
+import { API_BASE_URL, getApiUrl, parseApiJson, readApiResponseMessage } from "../lib/api";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -20,7 +20,7 @@ export default function Login() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/login`, {
+      const response = await fetch(getApiUrl("/login"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -29,10 +29,10 @@ export default function Login() {
       });
 
       const responseText = await response.text();
-      const data = responseText ? JSON.parse(responseText) : null;
+      const data = parseApiJson<{ success?: boolean; user_id?: string; history?: unknown[]; message?: string; error?: string }>(responseText);
 
       if (!response.ok) {
-        alert(data?.message || data?.error || "Login failed");
+        alert(readApiResponseMessage(responseText, "Login failed"));
         return;
       }
 
@@ -51,7 +51,7 @@ export default function Login() {
       }
     } catch (error) {
       console.error(error);
-      alert(`Login failed. Make sure the backend is reachable at ${API_BASE_URL}`);
+      alert(API_BASE_URL ? `Login failed. Make sure the backend is reachable at ${API_BASE_URL}` : "Login failed. Set VITE_API_URL first.");
     }
   };
 

@@ -1,7 +1,8 @@
-import os
 from functools import lru_cache
 
 from pymongo import MongoClient
+
+from config import get_settings
 
 
 class MongoUnavailableError(RuntimeError):
@@ -10,9 +11,9 @@ class MongoUnavailableError(RuntimeError):
 
 @lru_cache(maxsize=1)
 def get_mongo_client() -> MongoClient:
-    mongo_uri = os.getenv("MONGO_URI", "").strip()
+    mongo_uri = get_settings()["mongodb_uri"]
     if not mongo_uri:
-        raise MongoUnavailableError("MONGO_URI is not configured")
+        raise MongoUnavailableError("MONGODB_URI is not configured")
 
     try:
         return MongoClient(
@@ -26,6 +27,6 @@ def get_mongo_client() -> MongoClient:
 
 
 def get_users_collection():
-    db_name = os.getenv("MONGO_DB_NAME", "matricare").strip() or "matricare"
+    db_name = get_settings()["mongo_db_name"]
     client = get_mongo_client()
     return client[db_name]["users"]

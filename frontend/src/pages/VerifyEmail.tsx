@@ -2,7 +2,7 @@ import { useEffect, useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Heart } from "lucide-react";
 import heroImage from "@/assets/hero-mother.jpg";
-import { API_BASE_URL } from "../lib/api";
+import { API_BASE_URL, getApiUrl, parseApiJson, readApiResponseMessage } from "../lib/api";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 export default function VerifyEmail() {
@@ -25,7 +25,7 @@ export default function VerifyEmail() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/verify-email`, {
+      const response = await fetch(getApiUrl("/verify-email"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -34,10 +34,10 @@ export default function VerifyEmail() {
       });
 
       const responseText = await response.text();
-      const data = responseText ? JSON.parse(responseText) : null;
+      const data = parseApiJson<{ success?: boolean; message?: string; error?: string }>(responseText);
 
       if (!response.ok) {
-        alert(data?.message || data?.error || "Verification failed");
+        alert(readApiResponseMessage(responseText, "Verification failed"));
         return;
       }
 
@@ -50,7 +50,7 @@ export default function VerifyEmail() {
       }
     } catch (error) {
       console.error(error);
-      alert(`Verification failed. Make sure the backend is reachable at ${API_BASE_URL}`);
+      alert(API_BASE_URL ? `Verification failed. Make sure the backend is reachable at ${API_BASE_URL}` : "Verification failed. Set VITE_API_URL first.");
     }
   };
 
